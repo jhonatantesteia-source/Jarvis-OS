@@ -68,9 +68,11 @@ mode), no Garmin Connect / Strava / cloud dependency. See
 `docs/ARCHITECTURE.md` for the data flow.
 
 ```powershell
-# with the watch connected and mounted as a drive (e.g. E:\)
+# com o relógio conectado e montado como unidade (ex.: E:\)
 curl -X POST http://127.0.0.1:8765/integrations/garmin/scan
 curl http://127.0.0.1:8765/integrations/garmin/status
+curl http://127.0.0.1:8765/integrations/garmin/diagnostics
+python -m integrations.garmin.diagnostics
 ```
 
 Acceptance criteria:
@@ -86,6 +88,8 @@ Acceptance criteria:
   in `system_events`.
 - All of `integrations/garmin/tests/` and `tests/test_garmin_api.py` pass
   without the physical device (fixtures only).
+- The diagnostic CLI can be run with `python -m integrations.garmin.diagnostics`
+  when the watch is connected, or with `--path` against a fixture directory.
 
 ## Roadmap
 

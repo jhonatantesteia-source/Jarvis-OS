@@ -54,3 +54,23 @@ def test_status_after_scan_reflects_connected_state(monkeypatch):
     client.post("/integrations/garmin/scan")
     r = client.get("/integrations/garmin/status")
     assert r.json()["connected"] is True
+
+
+def test_diagnostics_endpoint_uses_diagnostic_service(monkeypatch):
+    from integrations.garmin.diagnostics import GarminDiagnostics
+
+    fake = GarminDiagnostics(
+        connected=True, mount_point="E:/", garmin_root="E:/Garmin",
+        device_id="3324546267", model_description="Forerunner 245",
+        software_version="1370", device_xml_valid=True, total_files=2,
+        total_bytes=100, extensions={".fit": 1, ".xml": 1},
+        top_level_entries=["Activity"], errors=[],
+    )
+    monkeypatch.setattr("core.api.routes.garmin.run_diagnostics", lambda: fake)
+
+    r = TestClient(app).get("/integrations/garmin/diagnostics")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["connected"] is True
+    assert body["device_id"] == "3324546267"
+    assert body["extensions"][".fit"] == 1

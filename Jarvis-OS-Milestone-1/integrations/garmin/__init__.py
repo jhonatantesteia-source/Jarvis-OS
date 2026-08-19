@@ -1,6 +1,6 @@
-"""Módulo GARMIN — detecção local-first do dispositivo conectado via USB.
+"""Módulo GARMIN — integração local-first via USB.
 
-Milestone 1: apenas reconhecimento de conexão (device presente/ausente).
-Leitura/importação de atividades fica para os próximos incrementos
-(ver docs/ARCHITECTURE.md e docs/ROADMAP.md).
+Milestone 1: reconhecimento do dispositivo e diagnóstico somente-leitura.
+A leitura/importação de atividades será adicionada em incrementos posteriores,
+após validar o formato real dos arquivos do relógio.
 """
