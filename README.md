@@ -61,6 +61,36 @@ npm run dev
 - Logs are written to `logs/`.
 - Secrets are excluded from Git.
 
+## Milestone 1 — Garmin device recognition
+
+Local-first detection of a Garmin watch connected via USB (Mass Storage
+mode), no Garmin Connect / Strava / cloud dependency. See
+`docs/ARCHITECTURE.md` for the data flow.
+
+```powershell
+# com o relógio conectado e montado como unidade (ex.: E:\)
+curl -X POST http://127.0.0.1:8765/integrations/garmin/scan
+curl http://127.0.0.1:8765/integrations/garmin/status
+curl http://127.0.0.1:8765/integrations/garmin/diagnostics
+python -m integrations.garmin.diagnostics
+```
+
+Acceptance criteria:
+
+- Python Core starts a background poller that detects a connected watch
+  without any manual request (checks every 5s).
+- `POST /integrations/garmin/scan` forces an immediate check and returns
+  the current status.
+- `GET /integrations/garmin/status` returns the last known status without
+  touching the filesystem.
+- Connecting/disconnecting the watch publishes `garmin.device.connected`
+  / `garmin.device.disconnected` on the Event Bus and records the event
+  in `system_events`.
+- All of `integrations/garmin/tests/` and `tests/test_garmin_api.py` pass
+  without the physical device (fixtures only).
+- The diagnostic CLI can be run with `python -m integrations.garmin.diagnostics`
+  when the watch is connected, or with `--path` against a fixture directory.
+
 ## Roadmap
 
 Foundation → LLM → Windows Tools → Memory → Skills → Voice → Agents → Neural HUD → Proactivity → Production Packaging.
