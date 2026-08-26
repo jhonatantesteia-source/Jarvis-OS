@@ -17,10 +17,17 @@ class ToolCall:
 
     Kept as an explicit model — rather than a raw ``Mapping[str, Any]`` —
     so the runtime and its tests have a single, typed shape to work with.
+
+    ``id`` correlates this call with its eventual tool-result message. It is
+    taken from the provider's response when present (mirroring how real
+    tool-calling APIs identify a call); otherwise the runtime assigns a
+    deterministic fallback so multiple simultaneous tool calls in the same
+    round never fail to correlate correctly.
     """
 
     name: str
     arguments: Mapping[str, Any] = field(default_factory=dict)
+    id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
