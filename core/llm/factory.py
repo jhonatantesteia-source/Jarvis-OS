@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.llm.base import LLMProvider
+from core.llm.providers.fake import FakeLLMProvider
 
 if TYPE_CHECKING:
     from core.config.settings import Settings
@@ -17,7 +18,8 @@ class UnsupportedLLMProviderError(ValueError):
 def create_llm_provider(settings: Settings) -> LLMProvider:
     """Create the configured LLM provider.
 
-    Concrete providers are intentionally not implemented yet.
+    Supported providers:
+    - fake: Deterministic provider for testing.
     """
     provider_name = settings.llm_provider.strip().lower()
 
@@ -25,6 +27,9 @@ def create_llm_provider(settings: Settings) -> LLMProvider:
         raise UnsupportedLLMProviderError(
             "LLM provider cannot be empty."
         )
+
+    if provider_name == "fake":
+        return FakeLLMProvider(model=settings.llm_model or "fake-llm-v1")
 
     raise UnsupportedLLMProviderError(
         f"LLM provider '{provider_name}' is not implemented."

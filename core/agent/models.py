@@ -5,10 +5,20 @@ and its callers. They intentionally know nothing about any concrete LLM
 provider or tool implementation — only about the shapes exchanged with
 ``core.llm`` and ``core.tools``.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
+
+
+@dataclass(frozen=True, slots=True)
+class AgentContext:
+    """Minimal context for a single agent turn."""
+
+    system_instruction: str | None = None
+    messages: Sequence[Mapping[str, Any]] = field(default_factory=tuple)
+    metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,11 +45,13 @@ class AgentRequest:
     """Input to the Agent Runtime: the conversation so far."""
 
     messages: Sequence[Mapping[str, Any]]
+    session_id: str | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
 class AgentResponse:
-    """Final output of the Agent Runtime, after any tool rounds.
+    """Final output of the Agent Runtime.
 
     ``tool_calls`` records every tool call executed while producing this
     response (useful for logging/debugging); ``rounds_used`` is the number
@@ -47,5 +59,8 @@ class AgentResponse:
     """
 
     content: str
+    model: str | None = None
+    provider: str | None = None
     tool_calls: Sequence[ToolCall] = field(default_factory=tuple)
     rounds_used: int = 0
+    metadata: Mapping[str, Any] = field(default_factory=dict)

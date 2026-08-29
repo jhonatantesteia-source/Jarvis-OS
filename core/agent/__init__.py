@@ -18,12 +18,10 @@ this module builds on.
 
 from .models import AgentRequest, AgentResponse, ToolCall
 from .runtime import (
-    MAX_TOOL_ROUNDS,
+    DefaultAgent,
     AgentError,
     AgentRuntime,
     InvalidLLMResponseError,
-    MaxToolRoundsExceededError,
-    ToolExecutionError,
     ToolNotFoundError,
 )
 
@@ -31,11 +29,9 @@ __all__ = [
     "AgentRequest",
     "AgentResponse",
     "ToolCall",
+    "DefaultAgent",
     "AgentRuntime",
     "AgentError",
     "ToolNotFoundError",
-    "ToolExecutionError",
     "InvalidLLMResponseError",
-    "MaxToolRoundsExceededError",
-    "MAX_TOOL_ROUNDS",
 ]

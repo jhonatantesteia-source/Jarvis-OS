@@ -1,5 +1,6 @@
 """LLM provider abstractions for Jarvis OS."""
 
-from .base import LLMProvider, LLMResponse
+from .base import LLMProvider
+from .models import LLMRequest, LLMResponse
 
-__all__ = ["LLMProvider", "LLMResponse"]
+__all__ = ["LLMProvider", "LLMRequest", "LLMResponse"]

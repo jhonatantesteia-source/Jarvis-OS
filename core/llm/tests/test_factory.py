@@ -45,3 +45,10 @@ def test_settings_loads_llm_configuration():
 
     assert settings.llm_provider == "anthropic"
     assert settings.llm_model == "test-model"
+
+
+def test_factory_creates_fake_provider():
+    settings = Settings(llm_provider="fake")
+    provider = create_llm_provider(settings)
+    assert provider.__class__.__name__ == "FakeLLMProvider"
+

@@ -7,19 +7,9 @@ external API dependency. Concrete providers can be added in later milestones.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any, Sequence
 
-
-@dataclass(frozen=True, slots=True)
-class LLMResponse:
-    """Normalized response returned by an LLM provider."""
-
-    content: str
-    model: str | None = None
-    tool_calls: Sequence[Mapping[str, Any]] = field(default_factory=tuple)
-    raw: Any = None
-
+from core.llm.models import LLMRequest, LLMResponse
 
 class LLMProvider(ABC):
     """Minimal contract consumed by Jarvis Agent/Orchestrator layers."""
@@ -33,12 +23,10 @@ class LLMProvider(ABC):
     @abstractmethod
     async def complete(
         self,
-        messages: Sequence[Mapping[str, Any]],
-        *,
-        tools: Sequence[Mapping[str, Any]] | None = None,
+        request: LLMRequest,
         **kwargs: Any,
     ) -> LLMResponse:
-        """Generate a normalized response from a sequence of messages."""
+        """Generate a normalized response from an LLM request."""
         raise NotImplementedError
 
     @abstractmethod
