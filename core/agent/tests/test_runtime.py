@@ -20,7 +20,9 @@ from core.agent import (
 from core.llm import LLMProvider
 from core.llm.models import LLMRequest, LLMResponse
 from core.tools import Tool, ToolRegistry, ToolResult
-
+from core.tools.boundary import ToolInvocationBoundary
+from core.tools.policy import DefaultPolicyEngine
+from core.tools.executor import ToolExecutor
 
 class FakeLLMProvider(LLMProvider):
     """Deterministic LLM provider stub.
@@ -102,15 +104,22 @@ def _user_request(text: str) -> AgentRequest:
     return AgentRequest(messages=[{"role": "user", "content": text}])
 
 
+def runtime_setup(provider, tools=None):
+    registry = ToolRegistry()
+    if tools:
+        for tool in tools:
+            registry.register(tool)
+    boundary = ToolInvocationBoundary(registry, DefaultPolicyEngine())
+    executor = ToolExecutor()
+    return AgentRuntime(provider, registry, boundary, executor)
+
+
 # 1. Tool definitions are exposed to the provider via `tools=`.
 @pytest.mark.anyio
 async def test_tool_definitions_are_sent_to_provider() -> None:
     provider = FakeLLMProvider([LLMResponse(content="ok")])
-    registry = ToolRegistry()
     tool = EchoTool()
-    registry.register(tool)
-
-    agent = AgentRuntime(provider, registry)
+    agent = runtime_setup(provider, [tool])
     await agent.run(_user_request("hi"))
 
     assert len(provider.received_tools) == 1
@@ -127,11 +136,7 @@ async def test_tool_definitions_are_sent_to_provider() -> None:
 @pytest.mark.anyio
 async def test_multiple_tool_definitions_are_all_sent_to_provider() -> None:
     provider = FakeLLMProvider([LLMResponse(content="ok")])
-    registry = ToolRegistry()
-    registry.register(EchoTool())
-    registry.register(FailingTool())
-
-    agent = AgentRuntime(provider, registry)
+    agent = runtime_setup(provider, [EchoTool(), FailingTool()])
     await agent.run(_user_request("hi"))
 
     tools_sent = provider.received_tools[0]
@@ -143,27 +148,25 @@ async def test_multiple_tool_definitions_are_all_sent_to_provider() -> None:
     assert len(tools_sent) == 2
 
 
-# 3. A tool call is identified and produced in the AgentResponse.
+# 3. Tool calls are executed and result in a final response.
 @pytest.mark.anyio
 async def test_agent_produces_tool_call_response() -> None:
     tool_call_response = LLMResponse(
         content="Let me check that.",
-        tool_calls=({"name": "echo", "arguments": {"text": "ping"}},),
+        tool_calls=({"name": "echo", "arguments": {"text": "ping"}, "id": "call_1"},),
     )
-    provider = FakeLLMProvider([tool_call_response])
+    final_response = LLMResponse(content="The echo is ping")
+    provider = FakeLLMProvider([tool_call_response, final_response])
 
-    registry = ToolRegistry()
-    registry.register(EchoTool())
-    agent = AgentRuntime(provider, registry)
-
+    agent = runtime_setup(provider, [EchoTool()])
     response = await agent.run(_user_request("echo ping"))
 
-    assert response.content == "Let me check that."
+    assert response.content == "The echo is ping"
     assert len(response.tool_calls) == 1
     assert response.tool_calls[0].name == "echo"
     assert response.tool_calls[0].arguments == {"text": "ping"}
-    # Verify only ONE provider call was made (no automatic loop)
-    assert len(provider.calls) == 1
+    # Verify two provider calls: one for tool call, one for final answer
+    assert len(provider.calls) == 2
 
 
 # 4. The history preserves the request in the canonical shape.
@@ -173,47 +176,45 @@ async def test_request_history_is_preserved() -> None:
         content="Checking...",
         tool_calls=({"id": "call_1", "name": "echo", "arguments": {"text": "ping"}},),
     )
-    provider = FakeLLMProvider([tool_call_response])
+    final_response = LLMResponse(content="Done")
+    provider = FakeLLMProvider([tool_call_response, final_response])
 
-    registry = ToolRegistry()
-    registry.register(EchoTool())
-    agent = AgentRuntime(provider, registry)
-
+    agent = runtime_setup(provider, [EchoTool()])
     await agent.run(_user_request("echo ping"))
 
     # First call only carries the original user message.
     assert provider.calls[0] == [{"role": "user", "content": "echo ping"}]
 
 
-# 5. Requesting a tool absent from the registry does NOT fail inside AgentRuntime
-#    because AgentRuntime only produces the call. Validation happens at the boundary.
+# 5. Requesting a tool absent from the registry is handled as an error fed to the LLM.
 @pytest.mark.anyio
 async def test_agent_produces_unknown_tool_call() -> None:
     tool_call_response = LLMResponse(
         content="",
         tool_calls=({"name": "does_not_exist", "arguments": {}},),
     )
-    provider = FakeLLMProvider([tool_call_response])
-    agent = AgentRuntime(provider, ToolRegistry())
+    final_response = LLMResponse(content="I can't find that tool.")
+    provider = FakeLLMProvider([tool_call_response, final_response])
+    agent = runtime_setup(provider, [])
 
     response = await agent.run(_user_request("use a tool that doesn't exist"))
+    assert "can't find" in response.content
     assert response.tool_calls[0].name == "does_not_exist"
 
 
-# 6. A tool reporting failure is NOT handled by AgentRuntime during production.
+# 6. A tool reporting failure is fed back to the LLM.
 @pytest.mark.anyio
 async def test_agent_produces_failing_tool_call() -> None:
     tool_call_response = LLMResponse(
         content="",
         tool_calls=({"name": "failing_tool", "arguments": {}},),
     )
-    provider = FakeLLMProvider([tool_call_response])
+    final_response = LLMResponse(content="The tool failed.")
+    provider = FakeLLMProvider([tool_call_response, final_response])
 
-    registry = ToolRegistry()
-    registry.register(FailingTool())
-    agent = AgentRuntime(provider, registry)
-
+    agent = runtime_setup(provider, [FailingTool()])
     response = await agent.run(_user_request("use the failing tool"))
+    assert "failed" in response.content
     assert response.tool_calls[0].name == "failing_tool"
 
 
@@ -222,7 +223,7 @@ async def test_agent_produces_failing_tool_call() -> None:
 async def test_malformed_tool_call_raises_invalid_llm_response_error() -> None:
     tool_call_response = LLMResponse(content="", tool_calls=({"arguments": {}},))
     provider = FakeLLMProvider([tool_call_response])
-    agent = AgentRuntime(provider, ToolRegistry())
+    agent = runtime_setup(provider, [])
 
     with pytest.raises(InvalidLLMResponseError):
         await agent.run(_user_request("trigger a malformed tool call"))
@@ -232,7 +233,7 @@ async def test_malformed_tool_call_raises_invalid_llm_response_error() -> None:
 @pytest.mark.anyio
 async def test_agent_returns_final_response_without_tool_call() -> None:
     provider = FakeLLMProvider([LLMResponse(content="Hello, Jarvis.")])
-    agent = AgentRuntime(provider, ToolRegistry())
+    agent = runtime_setup(provider, [])
 
     response = await agent.run(_user_request("Hi"))
 

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     api_url: str = "http://127.0.0.1:8765"
     llm_provider: str = "openai"
     llm_model: str = ""
+    ollama_host: str = "http://localhost:11434"
 
     model_config = SettingsConfigDict(
         env_file=".env",

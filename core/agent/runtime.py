@@ -14,6 +14,8 @@ from core.agent.interface import Agent
 from core.agent.models import AgentContext, AgentRequest, AgentResponse, ToolCall
 from core.llm import LLMProvider, LLMRequest, LLMResponse
 from core.tools import ToolRegistry
+from core.tools.base import ToolResult
+from core.tools.boundary import ToolInvocationBoundary, PolicyDeniedError, ApprovalRequiredError
 
 class ToolNotFoundError(AgentError):
     """Raised when the LLM requests a tool that is not in the ToolRegistry."""
@@ -89,47 +91,99 @@ class AgentRuntime(DefaultAgent):
         self,
         provider: LLMProvider,
         tool_registry: ToolRegistry,
+        boundary: ToolInvocationBoundary,
+        executor: ToolExecutor,
         context: AgentContext | None = None,
         *,
         max_tool_rounds: int = MAX_TOOL_ROUNDS,
     ) -> None:
         super().__init__(provider, context)
         self._tool_registry = tool_registry
+        self._boundary = boundary
+        self._executor = executor
         self._max_tool_rounds = max_tool_rounds
 
     async def run(self, request: AgentRequest) -> AgentResponse:
-        """Produce an agent response, which may contain tool calls.
+        """Produce an agent response by iterating through tool calls.
 
-        Note: This method does NOT execute the tools. Execution is handled
-        by the Tool Invocation Boundary and subsequent executor.
+        The runtime calls the LLM, executes any requested tools, and feeds the
+        results back to the LLM until a final answer is reached or the round
+        limit is hit.
         """
         messages = list(self._context.messages) + list(request.messages)
         tool_definitions = self._build_tool_definitions()
 
-        # For a single turn, we just call the provider once.
-        # If the provider returns tool calls, we return them as part of the response.
-        response = await self._provider.complete(
-            LLMRequest(messages=messages),
-            tools=tool_definitions or None
-        )
+        all_executed_calls: list[ToolCall] = []
+        current_round = 0
 
-        tool_calls = self._extract_tool_calls(response, round_number=1)
+        while current_round <= self._max_tool_rounds:
+            # 1. Call the provider
+            try:
+                response = await self._provider.complete(
+                    LLMRequest(messages=messages),
+                    tools=tool_definitions or None
+                )
+            except Exception as exc:
+                if isinstance(exc, AgentError):
+                    raise
+                raise AgentExecutionError(f"LLM provider failure: {exc}") from exc
 
-        if not tool_calls:
-            return AgentResponse(
-                content=response.content,
-                model=response.model,
-                provider="unknown",
-                rounds_used=0,
-            )
+            # 2. Extract tool calls
+            tool_calls = self._extract_tool_calls(response, round_number=current_round + 1)
 
+            if not tool_calls:
+                return AgentResponse(
+                    content=response.content,
+                    model=response.model,
+                    provider="unknown",
+                    tool_calls=tuple(all_executed_calls),
+                    rounds_used=current_round,
+                )
+
+            # 3. Execute tools
+            # Add assistant's tool-call request to history
+            messages.append({
+                "role": "assistant",
+                "content": response.content,
+                "tool_calls": [
+                    {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": tc.arguments}}
+                    for tc in tool_calls
+                ]
+            })
+
+            for tool_call in tool_calls:
+                all_executed_calls.append(tool_call)
+
+                try:
+                    # Validation & Policy
+                    validated_call = await self._boundary.validate(tool_call)
+                    # Execution
+                    result = await self._executor.execute(validated_call)
+                except (PolicyDeniedError, ToolNotFoundError) as exc:
+                    result = ToolResult(success=False, error=str(exc))
+                except ApprovalRequiredError as exc:
+                    result = ToolResult(success=False, error=f"User approval required: {exc}")
+                except Exception as exc:
+                    result = ToolResult(success=False, error=f"Unexpected tool error: {exc}")
+
+                # Append result to history
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": str(result.content if result.success else result.error),
+                })
+
+            current_round += 1
+
+        # Max rounds reached
         return AgentResponse(
-            content=response.content,
+            content=f"Max tool rounds ({self._max_tool_rounds}) reached. Last response: {response.content}",
             model=response.model,
             provider="unknown",
-            tool_calls=tool_calls,
-            rounds_used=1,
+            tool_calls=tuple(all_executed_calls),
+            rounds_used=current_round,
         )
+
 
     def _build_tool_definitions(self) -> tuple[Mapping[str, Any], ...]:
         return tuple(
