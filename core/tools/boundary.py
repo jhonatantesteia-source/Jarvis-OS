@@ -11,22 +11,15 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from core.agent.models import ToolCall
-from core.agent.errors import AgentError
 from core.tools.base import Tool
 from core.tools.registry import ToolRegistry
 from core.tools.policy import PolicyEngine, PolicyDecision, PolicyDecisionType
-
-
-class ToolValidationError(AgentError):
-    """Raised when a tool call fails validation."""
-
-
-class PolicyDeniedError(AgentError):
-    """Raised when a tool call is explicitly denied by the policy engine."""
-
-
-class ApprovalRequiredError(AgentError):
-    """Raised when a tool call requires user approval but none was provided."""
+from core.tools.errors import (
+    ToolValidationError,
+    PolicyDeniedError,
+    ApprovalRequiredError,
+    ToolNotFoundError,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,7 +55,6 @@ class ToolInvocationBoundary:
         # 1. Lookup the tool in the registry
         tool = self._registry.get(tool_call.name)
         if tool is None:
-            from core.agent.runtime import ToolNotFoundError
             raise ToolNotFoundError(f"Tool not found in registry: {tool_call.name!r}")
 
         # 2. Validate arguments against the tool's input schema

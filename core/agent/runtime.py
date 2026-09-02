@@ -15,10 +15,8 @@ from core.agent.models import AgentContext, AgentRequest, AgentResponse, ToolCal
 from core.llm import LLMProvider, LLMRequest, LLMResponse
 from core.tools import ToolRegistry
 from core.tools.base import ToolResult
-from core.tools.boundary import ToolInvocationBoundary, PolicyDeniedError, ApprovalRequiredError
-
-class ToolNotFoundError(AgentError):
-    """Raised when the LLM requests a tool that is not in the ToolRegistry."""
+from core.tools.boundary import ToolInvocationBoundary
+from core.tools.errors import ToolNotFoundError, PolicyDeniedError, ApprovalRequiredError
 
 
 class InvalidLLMResponseError(AgentError):
@@ -81,10 +79,10 @@ class DefaultAgent(Agent):
 
 
 class AgentRuntime(DefaultAgent):
-    """Agent runtime that supports tool call production.
+    """Agent runtime that supports tool call production and execution.
 
-    The AgentRuntime identifies when an LLM wants to use tools and produces
-    the corresponding ToolCall models, but it does NOT execute them.
+    The AgentRuntime orchestrates the loop between the LLM and tool execution:
+    LLM -> ToolCall -> InvocationBoundary -> Policy -> Executor -> ToolResult -> LLM.
     """
 
     def __init__(
@@ -116,7 +114,7 @@ class AgentRuntime(DefaultAgent):
         all_executed_calls: list[ToolCall] = []
         current_round = 0
 
-        while current_round <= self._max_tool_rounds:
+        while current_round < self._max_tool_rounds:
             # 1. Call the provider
             try:
                 response = await self._provider.complete(

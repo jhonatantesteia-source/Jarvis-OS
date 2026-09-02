@@ -26,7 +26,7 @@ class SimpleTool(Tool):
 class TestOllamaLoop:
     @pytest_asyncio.fixture
     async def runtime(self):
-        provider = OllamaProvider(model="qwen3:1.7b")
+        provider = OllamaProvider(model="qwen3.5:9b")
         registry = ToolRegistry()
         tool = SimpleTool("hello_tool")
         registry.register(tool)
@@ -34,7 +34,7 @@ class TestOllamaLoop:
         executor = ToolExecutor()
         runtime = AgentRuntime(provider, registry, boundary, executor)
         yield runtime
-        await provider._client.aclose()
+        await provider.close()
 
     @pytest.mark.asyncio
     async def test_ollama_loop_direct(self, runtime):

@@ -194,8 +194,8 @@ async def test_loop_max_iterations(setup_loop):
     response = await runtime.run(request)
 
     assert "Max tool rounds (3) reached" in response.content
-    assert response.rounds_used == 4 # It executes the 4th call then stops
-    assert len(response.tool_calls) == 4
+    assert response.rounds_used == 3
+    assert len(response.tool_calls) == 3
 
 @pytest.mark.anyio
 async def test_loop_provider_failure(setup_loop):
