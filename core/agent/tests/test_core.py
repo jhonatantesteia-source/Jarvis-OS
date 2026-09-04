@@ -16,6 +16,10 @@ class FakeLLMProvider(LLMProvider):
         self.last_request: LLMRequest | None = None
 
     @property
+    def name(self) -> str:
+        return "fake"
+
+    @property
     def supports_tools(self) -> bool:
         return False
 

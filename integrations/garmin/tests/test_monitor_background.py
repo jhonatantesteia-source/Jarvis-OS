@@ -20,8 +20,17 @@ def test_monitor_background_detects_device(monkeypatch):
     device = make_device()
 
     detected_devices = [device, None]
+    detection_count = 0
+    second_detection = asyncio.Event()
 
     def fake_find_device():
+        nonlocal detection_count
+
+        detection_count += 1
+
+        if detection_count == 2:
+            second_detection.set()
+
         if detected_devices:
             return detected_devices.pop(0)
 
@@ -50,14 +59,18 @@ def test_monitor_background_detects_device(monkeypatch):
             monitor.run_forever(interval_seconds=0.01)
         )
 
-        await asyncio.sleep(0.05)
-
-        task.cancel()
-
         try:
-            await task
-        except asyncio.CancelledError:
-            pass
+            await asyncio.wait_for(
+                second_detection.wait(),
+                timeout=1.0,
+            )
+        finally:
+            task.cancel()
+
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     asyncio.run(run_test())
 

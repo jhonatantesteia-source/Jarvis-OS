@@ -16,6 +16,12 @@ class LLMProvider(ABC):
 
     @property
     @abstractmethod
+    def name(self) -> str:
+        """The unique identifier for this provider (e.g., 'openai', 'ollama')."""
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
     def supports_tools(self) -> bool:
         """Whether the provider supports structured tool/function calls."""
         raise NotImplementedError

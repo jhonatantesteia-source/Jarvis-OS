@@ -19,6 +19,10 @@ class FakeLLMProvider(LLMProvider):
         self._call_count = 0
 
     @property
+    def name(self) -> str:
+        return "fake"
+
+    @property
     def supports_tools(self) -> bool:
         return True
 
@@ -201,6 +205,8 @@ async def test_loop_max_iterations(setup_loop):
 async def test_loop_provider_failure(setup_loop):
     """LLMProvider raises exception -> AgentExecutionError."""
     class FailingProvider(LLMProvider):
+        @property
+        def name(self) -> str: return "failing"
         @property
         def supports_tools(self) -> bool: return True
         async def complete(self, request, **kwargs): raise RuntimeError("API Down")

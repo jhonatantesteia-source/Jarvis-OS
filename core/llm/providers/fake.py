@@ -18,6 +18,10 @@ class FakeLLMProvider(LLMProvider):
         self._model = model
 
     @property
+    def name(self) -> str:
+        return "fake"
+
+    @property
     def supports_tools(self) -> bool:
         return True
 

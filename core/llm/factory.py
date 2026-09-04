@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from core.llm.base import LLMProvider
 from core.llm.providers.fake import FakeLLMProvider
+from core.llm.providers.ollama import OllamaProvider
 
 if TYPE_CHECKING:
     from core.config.settings import Settings
@@ -20,6 +21,7 @@ def create_llm_provider(settings: Settings) -> LLMProvider:
 
     Supported providers:
     - fake: Deterministic provider for testing.
+    - ollama: Local LLM runtime provider.
     """
     provider_name = settings.llm_provider.strip().lower()
 
@@ -30,6 +32,9 @@ def create_llm_provider(settings: Settings) -> LLMProvider:
 
     if provider_name == "fake":
         return FakeLLMProvider(model=settings.llm_model or "fake-llm-v1")
+
+    if provider_name == "ollama":
+        return OllamaProvider(model=settings.llm_model)
 
     raise UnsupportedLLMProviderError(
         f"LLM provider '{provider_name}' is not implemented."

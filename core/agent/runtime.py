@@ -68,7 +68,7 @@ class DefaultAgent(Agent):
             return AgentResponse(
                 content=response.content,
                 model=response.model,
-                provider="unknown",
+                provider=self._provider.name,
                 rounds_used=0,
             )
 
@@ -133,7 +133,7 @@ class AgentRuntime(DefaultAgent):
                 return AgentResponse(
                     content=response.content,
                     model=response.model,
-                    provider="unknown",
+                    provider=self._provider.name,
                     tool_calls=tuple(all_executed_calls),
                     rounds_used=current_round,
                 )
@@ -177,7 +177,7 @@ class AgentRuntime(DefaultAgent):
         return AgentResponse(
             content=f"Max tool rounds ({self._max_tool_rounds}) reached. Last response: {response.content}",
             model=response.model,
-            provider="unknown",
+            provider=self._provider.name,
             tool_calls=tuple(all_executed_calls),
             rounds_used=current_round,
         )

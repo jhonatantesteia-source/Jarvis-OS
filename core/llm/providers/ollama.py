@@ -19,7 +19,11 @@ class OllamaProvider(LLMProvider):
     def __init__(self, model: str | None = None, host: str | None = None) -> None:
         self._model = model or settings.llm_model or "llama3"
         self._host = host or settings.ollama_host
-        self._client = httpx.AsyncClient(base_url=f"{self._host}/api", timeout=120.0)
+        self._client = httpx.AsyncClient(base_url=self._host, timeout=120.0)
+
+    @property
+    def name(self) -> str:
+        return "ollama"
 
     @property
     def supports_tools(self) -> bool:
@@ -62,7 +66,7 @@ class OllamaProvider(LLMProvider):
 
         # 3. Request execution
         try:
-            response = await self._client.post("/chat", json=payload)
+            response = await self._client.post("/api/chat", json=payload)
             response.raise_for_status()
             data = response.json()
         except httpx.HTTPError as exc:
@@ -96,7 +100,7 @@ class OllamaProvider(LLMProvider):
     async def health_check(self) -> bool:
         """Check Ollama health by querying available tags."""
         try:
-            response = await self._client.get("/tags")
+            response = await self._client.get("/api/tags")
             return response.status_code == 200
         except httpx.HTTPError:
             return False

@@ -24,6 +24,7 @@ from core.tools.boundary import ToolInvocationBoundary
 from core.tools.policy import DefaultPolicyEngine
 from core.tools.executor import ToolExecutor
 
+
 class FakeLLMProvider(LLMProvider):
     """Deterministic LLM provider stub.
 
@@ -37,6 +38,10 @@ class FakeLLMProvider(LLMProvider):
         self._responses: list[LLMResponse] = list(responses)
         self.calls: list[list[Mapping[str, Any]]] = []
         self.received_tools: list[Sequence[Mapping[str, Any]] | None] = []
+
+    @property
+    def name(self) -> str:
+        return "fake"
 
     @property
     def supports_tools(self) -> bool:
