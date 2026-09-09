@@ -13,6 +13,7 @@ from core.agent.errors import AgentError, AgentExecutionError, AgentInputError
 from core.agent.interface import Agent
 from core.agent.models import AgentContext, AgentRequest, AgentResponse, ToolCall
 from core.llm import LLMProvider, LLMRequest, LLMResponse
+from core.memory.base import MemoryProvider
 from core.tools import ToolRegistry
 from core.tools.base import ToolResult
 from core.tools.boundary import ToolInvocationBoundary
@@ -92,6 +93,7 @@ class AgentRuntime(DefaultAgent):
         boundary: ToolInvocationBoundary,
         executor: ToolExecutor,
         context: AgentContext | None = None,
+        memory_provider: MemoryProvider | None = None,
         *,
         max_tool_rounds: int = MAX_TOOL_ROUNDS,
     ) -> None:
@@ -100,6 +102,14 @@ class AgentRuntime(DefaultAgent):
         self._boundary = boundary
         self._executor = executor
         self._max_tool_rounds = max_tool_rounds
+        self._memory_provider = memory_provider
+
+        if self._memory_provider:
+            from core.memory.tools import StoreMemoryTool, RetrieveMemoryTool, ListMemoriesTool, DeleteMemoryTool
+            self._tool_registry.register(StoreMemoryTool(self._memory_provider))
+            self._tool_registry.register(RetrieveMemoryTool(self._memory_provider))
+            self._tool_registry.register(ListMemoriesTool(self._memory_provider))
+            self._tool_registry.register(DeleteMemoryTool(self._memory_provider))
 
     async def run(self, request: AgentRequest) -> AgentResponse:
         """Produce an agent response by iterating through tool calls.
