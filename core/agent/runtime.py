@@ -7,6 +7,7 @@ The runtime is responsible for producing an agent response, which may either be
 
 from __future__ import annotations
 
+import time
 from typing import Any, Mapping, Sequence
 
 from core.agent.errors import AgentError, AgentExecutionError, AgentInputError
@@ -14,6 +15,7 @@ from core.agent.interface import Agent
 from core.agent.models import AgentContext, AgentRequest, AgentResponse, ToolCall
 from core.llm import LLMProvider, LLMRequest, LLMResponse
 from core.memory.base import MemoryProvider
+from core.approval.base import ApprovalProvider, ApprovalRequest, ApprovalResult, ApprovalState
 from core.tools import ToolRegistry
 from core.tools.base import ToolResult
 from core.tools.boundary import ToolInvocationBoundary
@@ -94,6 +96,7 @@ class AgentRuntime(DefaultAgent):
         executor: ToolExecutor,
         context: AgentContext | None = None,
         memory_provider: MemoryProvider | None = None,
+        approval_provider: ApprovalProvider | None = None,
         *,
         max_tool_rounds: int = MAX_TOOL_ROUNDS,
     ) -> None:
@@ -103,6 +106,7 @@ class AgentRuntime(DefaultAgent):
         self._executor = executor
         self._max_tool_rounds = max_tool_rounds
         self._memory_provider = memory_provider
+        self._approval_provider = approval_provider
 
         if self._memory_provider:
             from core.memory.tools import StoreMemoryTool, RetrieveMemoryTool, ListMemoriesTool, DeleteMemoryTool
@@ -165,12 +169,39 @@ class AgentRuntime(DefaultAgent):
                 try:
                     # Validation & Policy
                     validated_call = await self._boundary.validate(tool_call)
-                    # Execution
-                    result = await self._executor.execute(validated_call)
+
+                    # Handle Human-in-the-Loop Authorization
+                    if validated_call.decision.decision == PolicyDecisionType.REQUIRE_USER_APPROVAL:
+                        if not self._approval_provider:
+                            result = ToolResult(success=False, error="Approval required but no ApprovalProvider configured.")
+                        else:
+                            # Create the bound ApprovalRequest
+                            approval_request = ApprovalRequest(
+                                request_id=tool_call.id or f"req_{time.time()}",
+                                tool_name=validated_call.tool.name,
+                                arguments=validated_call.call.arguments,
+                                risk_level=validated_call.decision.risk_level,
+                                reason=validated_call.decision.reason,
+                                timestamp=time.time(),
+                            )
+
+                            # Async wait for human decision
+                            approval_result = await self._approval_provider.request_approval(approval_request)
+
+                            if approval_result.state == ApprovalState.APPROVED and approval_result.grant:
+                                # Pass the explicit Grant to the executor
+                                result = await self._executor.execute(validated_call, grant=approval_result.grant)
+                            else:
+                                result = ToolResult(
+                                    success=False,
+                                    error=f"Tool execution denied by user or system: {approval_result.state.name}"
+                                )
+                    else:
+                        # Normal ALLOW flow (or DENY which is handled by executor)
+                        result = await self._executor.execute(validated_call)
+
                 except (PolicyDeniedError, ToolNotFoundError) as exc:
                     result = ToolResult(success=False, error=str(exc))
-                except ApprovalRequiredError as exc:
-                    result = ToolResult(success=False, error=f"User approval required: {exc}")
                 except Exception as exc:
                     result = ToolResult(success=False, error=f"Unexpected tool error: {exc}")
 

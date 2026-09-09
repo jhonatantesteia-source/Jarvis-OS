@@ -91,6 +91,51 @@ Acceptance criteria:
 - The diagnostic CLI can be run with `python -m integrations.garmin.diagnostics`
   when the watch is connected, or with `--path` against a fixture directory.
 
+## Milestone 2 — OpenJarvis Foundation
+
+Implementation of the core agent loop and security boundary.
+
+Architecture:
+LLM → AgentRuntime → ToolInvocationBoundary → PolicyEngine → ToolExecutor → Tool.
+
+Key features:
+- Provider-agnostic LLM interface.
+- Deterministic fake LLM for testing.
+- Local Ollama integration.
+- Fail-closed security policy (DENY by default).
+- Risk-based authorization (LOW, MEDIUM, HIGH, CRITICAL).
+
+## Milestone 3 — Persistent Memory
+
+Introduction of a local-first persistent memory subsystem.
+
+Architecture:
+AgentRuntime → MemoryProvider → LocalFileMemoryProvider → JSON storage.
+
+Key features:
+- MemoryEntry model (ID, content, timestamp, metadata).
+- Deterministic storage and retrieval.
+- Memory tools integrated into the Agent loop (store, retrieve, list, delete).
+- Persistence survives process restarts.
+
+Limitations:
+- Exact-ID retrieval only (no semantic search).
+- Flat global memory space.
+
+## Milestone 4 — Human-in-the-Loop (HITL)
+
+Transformation of approval requests into a secure authorization workflow.
+
+Architecture:
+LLM → AgentRuntime → ToolInvocationBoundary → PolicyEngine → ApprovalProvider → ApprovalGrant → ToolExecutor → Tool.
+
+Key features:
+- ApprovalProvider abstraction for asynchronous human decisions.
+- ApprovalGrant: Bound tokens ensuring exact tool and argument match.
+- Replay Protection: Single-use grants via in-memory tracking.
+- Expiration: Time-to-live (TTL) enforced at the final execution gate.
+- Fail-Closed: Any provider failure or denied decision blocks execution.
+
 ## Roadmap
 
-Foundation → LLM → Windows Tools → Memory → Skills → Voice → Agents → Neural HUD → Proactivity → Production Packaging.
+Foundation → LLM → Windows Tools → Memory → HITL → Skills → Voice → Agents → Neural HUD → Proactivity → Production Packaging.

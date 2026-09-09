@@ -57,7 +57,7 @@ async def test_executor_authorized_allow():
 async def test_executor_authorized_approved():
     """Verify that a tool requiring approval executes if approved=True."""
     tool = MockTool("approval_tool", {"type": "object", "properties": {}})
-    call = ToolCall(name="approval_tool", arguments={})
+    call = ToolCall(name="approval_tool", arguments={}, id="call_1")
     decision = PolicyDecision(
         decision=PolicyDecisionType.REQUIRE_USER_APPROVAL,
         reason="Approval needed",
@@ -66,7 +66,14 @@ async def test_executor_authorized_approved():
     validated = ValidatedToolCall(tool=tool, call=call, decision=decision)
 
     executor = ToolExecutor()
-    result = await executor.execute(validated, approved=True)
+    # Use a fake grant instead of approved=True
+    from core.approval.base import ApprovalGrant
+    import time
+    grant = ApprovalGrant(
+        grant_id="g1", request_id="call_1", tool_name=tool.name,
+        arguments=call.arguments, expires_at=time.time() + 100
+    )
+    result = await executor.execute(validated, grant=grant)
 
     assert result.success is True
     assert "Executed approval_tool" in result.content
@@ -86,7 +93,7 @@ async def test_executor_denies_unapproved():
 
     executor = ToolExecutor()
     with pytest.raises(ApprovalRequiredError, match="requires user approval"):
-        await executor.execute(validated, approved=False)
+        await executor.execute(validated)
 
 
 @pytest.mark.anyio
