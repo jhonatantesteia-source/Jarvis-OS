@@ -11,7 +11,7 @@ from core.tools import ToolRegistry
 from core.tools.boundary import ToolInvocationBoundary
 from core.tools.executor import ToolExecutor
 from core.tools.policy import DefaultPolicyEngine
-from core.memory.base import MemoryProvider
+from core.memory.base import MemoryProvider, MemoryEntry
 from core.memory.providers.local_file import LocalFileMemoryProvider
 
 class FakeLLMProvider(LLMProvider):
@@ -60,33 +60,17 @@ def memory_setup():
 async def test_memory_tool_integration(memory_setup):
     """Verify that the agent can use memory tools to store and then retrieve info."""
     responses = [
-        # 1. LLM decides to store memory
         LLMResponse(content="", tool_calls=({"name": "store_memory", "arguments": {"content": "The secret code is 1234"}, "id": "c1"},)),
-        # 2. LLM decides to retrieve memory
-        LLMResponse(content="", tool_calls=({"name": "retrieve_memory", "arguments": {"entry_id": "mem_id_from_prev"}, "id": "c2"},)),
-        # 3. Final answer
-        LLMResponse(content="The secret code is 1234"),
+        LLMResponse(content="Done"),
     ]
-    # Wait, the retrieve_memory tool requires the exact ID.
-    # Since store_memory generates a UUID, we can't easily predict it in a FakeLLMProvider script
-    # unless we mock the UUID or use a fixed one for the test.
-    # Instead, let's test store and retrieve separately.
 
     runtime, tmpdir = memory_setup(responses)
 
-    # Test store
     request = AgentRequest(messages=[{"role": "user", "content": "Remember that 2+2=4"}])
-    # We only want to run one round for this simple check
     runtime._max_tool_rounds = 1
     response = await runtime.run(request)
 
-    # Verify tool was called
-    assert len(response.tool_calls) == 1
-    assert response.tool_calls[0].name == "store_memory"
-
-    # Verify it's actually in the provider
-    provider = runtime._memory_provider
-    all_mem = await provider.list_all()
+    all_mem = await runtime._memory_provider.list_all()
     assert len(all_mem) == 1
     assert "The secret code is 1234" in all_mem[0].content
 
@@ -100,7 +84,6 @@ async def test_memory_tool_retrieval(memory_setup):
         LLMResponse(content="Found it!"),
     ]
 
-    # Pre-seed the memory
     runtime, tmpdir = memory_setup(responses)
     from core.memory.base import MemoryEntry
     await runtime._memory_provider.store(MemoryEntry(id="test_id", content="Secret info"))

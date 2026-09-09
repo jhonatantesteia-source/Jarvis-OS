@@ -20,6 +20,7 @@ from core.tools import ToolRegistry
 from core.tools.base import ToolResult
 from core.tools.boundary import ToolInvocationBoundary
 from core.tools.errors import ToolNotFoundError, PolicyDeniedError, ApprovalRequiredError
+from core.tools.policy import PolicyDecisionType
 
 
 class InvalidLLMResponseError(AgentError):
