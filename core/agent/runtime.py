@@ -190,8 +190,15 @@ class AgentRuntime(DefaultAgent):
                             approval_result = await self._approval_provider.request_approval(approval_request)
 
                             if approval_result.state == ApprovalState.APPROVED and approval_result.grant:
-                                # Pass the explicit Grant to the executor
-                                result = await self._executor.execute(validated_call, grant=approval_result.grant)
+                                # Bind ApprovalResult.request_id to the current request
+                                if approval_result.request_id != approval_request.request_id:
+                                    result = ToolResult(
+                                        success=False,
+                                        error=f"Approval result identity mismatch: expected {approval_request.request_id}, got {approval_result.request_id}"
+                                    )
+                                else:
+                                    # Pass the explicit Grant to the executor
+                                    result = await self._executor.execute(validated_call, grant=approval_result.grant)
                             else:
                                 result = ToolResult(
                                     success=False,
