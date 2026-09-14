@@ -23,6 +23,10 @@ from core.tools.errors import (
 )
 
 
+# Constants for supported JSON Schema subset to prevent silent failure/weakening
+SUPPORTED_TOP_LEVEL_KEYWORDS = {"type", "properties", "required"}
+SUPPORTED_PROP_KEYWORDS = {"type"}
+
 @dataclass(frozen=True, slots=True)
 class ValidatedToolCall:
     """A tool call that has been validated against the registry, schema, and policy."""
@@ -83,10 +87,18 @@ class ToolInvocationBoundary:
         """Perform strict validation of arguments against the tool's schema.
 
         Uses Pydantic to enforce type safety, reject unknown arguments, and prevent coercion.
+        Unsupported schema keywords result in a fail-closed ToolValidationError.
         """
         schema = tool.input_schema
         if not schema:
             return
+
+        # 1. Validate top-level schema keywords
+        for key in schema:
+            if key not in SUPPORTED_TOP_LEVEL_KEYWORDS:
+                raise ToolValidationError(
+                    f"Unsupported schema keyword {key!r} in tool {tool.name!r}. Fail closed."
+                )
 
         properties = schema.get("properties", {})
         required = schema.get("required", [])
@@ -101,9 +113,21 @@ class ToolInvocationBoundary:
         }
 
         try:
-            # Create a dynamic model with 'forbid' extra properties and 'strict' validation
+            # 2. Validate property-level schema keywords
             fields = {}
             for name, prop in properties.items():
+                if not isinstance(prop, dict):
+                    raise ToolValidationError(
+                        f"Property {name!r} for tool {tool.name!r} must be a schema object."
+                    )
+
+                for key in prop:
+                    if key not in SUPPORTED_PROP_KEYWORDS:
+                        raise ToolValidationError(
+                            f"Unsupported schema keyword {key!r} for argument {name!r} "
+                            f"in tool {tool.name!r}. Fail closed."
+                        )
+
                 json_type = prop.get("type")
                 if json_type not in type_map:
                     raise ToolValidationError(

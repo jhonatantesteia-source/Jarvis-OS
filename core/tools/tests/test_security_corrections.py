@@ -271,3 +271,104 @@ async def test_p0_2_validation_failure_no_execution(setup_boundary):
         pass
 
     assert tool.call_count == 0
+
+@pytest.mark.anyio
+async def test_p0_2_unsupported_top_level_keyword(setup_boundary):
+    """Verify that unsupported top-level schema keywords cause fail-closed rejection."""
+    boundary, registry, _ = setup_boundary
+    tool = MockTool("test_tool", {
+        "type": "object",
+        "properties": {},
+        "unexpected_keyword": "value"
+    })
+    registry.register(tool)
+    
+    call = ToolCall(name="test_tool", arguments={}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="Unsupported schema keyword 'unexpected_keyword' in tool 'test_tool'. Fail closed."):
+        await boundary.validate(call)
+
+@pytest.mark.anyio
+async def test_p0_2_unsupported_prop_keyword(setup_boundary):
+    """Verify that unsupported property-level schema keywords cause fail-closed rejection."""
+    boundary, registry, _ = setup_boundary
+    tool = MockTool("test_tool", {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "minLength": 10}
+        }
+    })
+    registry.register(tool)
+    
+    call = ToolCall(name="test_tool", arguments={"name": "too-short"}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="Unsupported schema keyword 'minLength' for argument 'name' in tool 'test_tool'. Fail closed."):
+        await boundary.validate(call)
+
+@pytest.mark.anyio
+async def test_p0_2_unsupported_enum_keyword(setup_boundary):
+    """Verify that unsupported 'enum' keyword cause fail-closed rejection."""
+    boundary, registry, _ = setup_boundary
+    tool = MockTool("test_tool", {
+        "type": "object",
+        "properties": {
+            "role": {"type": "string", "enum": ["admin", "user"]}
+        }
+    })
+    registry.register(tool)
+    
+    call = ToolCall(name="test_tool", arguments={"role": "admin"}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="Unsupported schema keyword 'enum' for argument 'role' in tool 'test_tool'. Fail closed."):
+        await boundary.validate(call)
+
+@pytest.mark.anyio
+async def test_p0_2_unsupported_numeric_constraint(setup_boundary):
+    """Verify that unsupported numeric constraints cause fail-closed rejection."""
+    boundary, registry, _ = setup_boundary
+    tool = MockTool("test_tool", {
+        "type": "object",
+        "properties": {
+            "age": {"type": "integer", "minimum": 1}
+        }
+    })
+    registry.register(tool)
+    
+    call = ToolCall(name="test_tool", arguments={"age": 25}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="Unsupported schema keyword 'minimum' for argument 'age' in tool 'test_tool'. Fail closed."):
+        await boundary.validate(call)
+
+@pytest.mark.anyio
+async def test_p0_2_unsupported_nested_schema(setup_boundary):
+    """Verify that unsupported nested schemas (properties in object) fail closed."""
+    boundary, registry, _ = setup_boundary
+    tool = MockTool("test_tool", {
+        "type": "object",
+        "properties": {
+            "meta": {
+                "type": "object",
+                "properties": {"key": {"type": "string"}}
+            }
+        }
+    })
+    registry.register(tool)
+    
+    call = ToolCall(name="test_tool", arguments={"meta": {"key": "val"}}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="Unsupported schema keyword 'properties' for argument 'meta' in tool 'test_tool'. Fail closed."):
+        await boundary.validate(call)
+
+@pytest.mark.anyio
+async def test_p0_2_supported_primitive_still_works(setup_boundary):
+    """Verify that existing valid primitive schemas still work."""
+    boundary, registry, _ = setup_boundary
+    tool = MockTool("test_tool", {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "age": {"type": "integer"},
+            "active": {"type": "boolean"},
+            "score": {"type": "number"}
+        }
+    })
+    registry.register(tool)
+    
+    call = ToolCall(name="test_tool", arguments={"name": "Jarvis", "age": 1, "active": True, "score": 95.5}, internal_id="int1")
+    validated = await boundary.validate(call)
+    assert validated.tool.name == "test_tool"
