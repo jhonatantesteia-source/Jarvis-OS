@@ -89,7 +89,8 @@ async def test_full_flow_deny(setup_system):
 async def test_full_flow_approval_required(setup_system):
     """Prove that a tool requiring approval is blocked by the executor unless approved."""
     boundary, executor = setup_system
-    call = ToolCall(name="med_risk", arguments={}, id="call_1")
+    # Add internal_id for security boundary
+    call = ToolCall(name="med_risk", arguments={}, id="call_1", internal_id="internal_1")
 
     # 1. Boundary validation (should pass but mark as requiring approval)
     validated = await boundary.validate(call)
@@ -102,7 +103,7 @@ async def test_full_flow_approval_required(setup_system):
     from core.approval.base import ApprovalGrant
     import time
     grant = ApprovalGrant(
-        grant_id="g1", request_id="call_1", tool_name="med_risk",
+        grant_id="g1", request_id="internal_1", tool_name="med_risk",
         arguments={}, expires_at=time.time() + 100
     )
     result = await executor.execute(validated, grant=grant)

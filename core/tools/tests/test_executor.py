@@ -57,7 +57,8 @@ async def test_executor_authorized_allow():
 async def test_executor_authorized_approved():
     """Verify that a tool requiring approval executes if approved=True."""
     tool = MockTool("approval_tool", {"type": "object", "properties": {}})
-    call = ToolCall(name="approval_tool", arguments={}, id="call_1")
+    # Add internal_id for security boundary
+    call = ToolCall(name="approval_tool", arguments={}, id="call_1", internal_id="internal_1")
     decision = PolicyDecision(
         decision=PolicyDecisionType.REQUIRE_USER_APPROVAL,
         reason="Approval needed",
@@ -70,7 +71,7 @@ async def test_executor_authorized_approved():
     from core.approval.base import ApprovalGrant
     import time
     grant = ApprovalGrant(
-        grant_id="g1", request_id="call_1", tool_name=tool.name,
+        grant_id="g1", request_id="internal_1", tool_name=tool.name,
         arguments=call.arguments, expires_at=time.time() + 100
     )
     result = await executor.execute(validated, grant=grant)
@@ -115,4 +116,4 @@ async def test_executor_handles_tool_failure():
     result = await executor.execute(validated)
 
     assert result.success is False
-    assert "Unexpected error during tool execution: Boom!" in result.error
+    assert "An internal error occurred during tool execution." in result.error
