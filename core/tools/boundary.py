@@ -50,9 +50,13 @@ class ToolInvocationBoundary:
 
         Raises:
             ToolNotFoundError: if the tool name is not registered.
-            ToolValidationError: if the arguments are invalid.
+            ToolValidationError: if the arguments are invalid or security identity is missing.
             PolicyDeniedError: if the policy engine explicitly denies the call.
         """
+        # 0. Security Identity Check
+        if not tool_call.internal_id:
+            raise ToolValidationError("Security violation: Tool call missing internal security identity.")
+
         # 1. Lookup the tool in the registry
         tool = self._registry.get(tool_call.name)
         if tool is None:
@@ -78,7 +82,7 @@ class ToolInvocationBoundary:
     def _validate_arguments(self, tool: Tool, arguments: Mapping[str, Any]) -> None:
         """Perform strict validation of arguments against the tool's schema.
 
-        Uses Pydantic to enforce type safety and reject unknown arguments.
+        Uses Pydantic to enforce type safety, reject unknown arguments, and prevent coercion.
         """
         schema = tool.input_schema
         if not schema:
@@ -93,21 +97,26 @@ class ToolInvocationBoundary:
             "integer": int,
             "boolean": bool,
             "number": float,
+            "object": dict,
         }
 
         try:
-            # Create a dynamic model with 'forbid' extra properties to reject unknown arguments
-            fields = {
-                name: (
-                    type_map.get(prop.get("type", "string"), Any),
-                    ... if name in required else None
-                )
-                for name, prop in properties.items()
-            }
+            # Create a dynamic model with 'forbid' extra properties and 'strict' validation
+            fields = {}
+            for name, prop in properties.items():
+                json_type = prop.get("type")
+                if json_type not in type_map:
+                    raise ToolValidationError(
+                        f"Unsupported schema type {json_type!r} for argument {name!r} "
+                        f"in tool {tool.name!r}. Fail closed."
+                    )
+
+                py_type = type_map[json_type]
+                fields[name] = (py_type, ... if name in required else None)
 
             ValidationModel = create_model(
                 f"{tool.name}Model",
-                __config__=ConfigDict(extra="forbid"),
+                __config__=ConfigDict(extra="forbid", strict=True),
                 **fields
             )
 
@@ -118,5 +127,7 @@ class ToolInvocationBoundary:
             loc = ".".join(map(str, error_detail["loc"]))
             msg = error_detail["msg"]
             raise ToolValidationError(f"Invalid argument {loc!r} for tool {tool.name!r}: {msg}")
+        except ToolValidationError:
+            raise
         except Exception as exc:
             raise ToolValidationError(f"Argument validation failed for tool {tool.name!r}: {exc}")

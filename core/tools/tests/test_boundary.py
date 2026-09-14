@@ -53,7 +53,7 @@ async def test_valid_tool_lookup():
     )
 
     boundary = ToolInvocationBoundary(registry, policy)
-    call = ToolCall(name="test_tool", arguments={})
+    call = ToolCall(name="test_tool", arguments={}, internal_id="test_id")
 
     validated = await boundary.validate(call)
 
@@ -69,7 +69,7 @@ async def test_unknown_tool_lookup():
     registry = ToolRegistry()
     policy = MagicMock(spec=PolicyEngine)
     boundary = ToolInvocationBoundary(registry, policy)
-    call = ToolCall(name="unknown_tool", arguments={})
+    call = ToolCall(name="unknown_tool", arguments={}, internal_id="test_id")
 
     with pytest.raises(ToolNotFoundError, match="Tool not found in registry"):
         await boundary.validate(call)
@@ -89,7 +89,7 @@ async def test_argument_validation_missing_required():
 
     policy = MagicMock(spec=PolicyEngine)
     boundary = ToolInvocationBoundary(registry, policy)
-    call = ToolCall(name="test_tool", arguments={}) # missing 'text'
+    call = ToolCall(name="test_tool", arguments={}, internal_id="test_id") # missing 'text'
 
     with pytest.raises(ToolValidationError, match="Field required"):
         await boundary.validate(call)
@@ -108,7 +108,7 @@ async def test_argument_validation_wrong_type():
 
     policy = MagicMock(spec=PolicyEngine)
     boundary = ToolInvocationBoundary(registry, policy)
-    call = ToolCall(name="test_tool", arguments={"count": "not-an-int"})
+    call = ToolCall(name="test_tool", arguments={"count": "not-an-int"}, internal_id="test_id")
 
     with pytest.raises(ToolValidationError, match="Input should be a valid integer"):
         await boundary.validate(call)
@@ -127,7 +127,7 @@ async def test_argument_validation_unknown_argument():
 
     policy = MagicMock(spec=PolicyEngine)
     boundary = ToolInvocationBoundary(registry, policy)
-    call = ToolCall(name="test_tool", arguments={"query": "weather", "unexpected": True})
+    call = ToolCall(name="test_tool", arguments={"query": "weather", "unexpected": True}, internal_id="test_id")
 
     with pytest.raises(ToolValidationError, match="Extra inputs are not permitted"):
         await boundary.validate(call)
@@ -159,7 +159,7 @@ async def test_no_execution_guarantee():
         risk_level=ToolRiskLevel.LOW
     )
     boundary = ToolInvocationBoundary(registry, policy)
-    call = ToolCall(name="risky_tool", arguments={})
+    call = ToolCall(name="risky_tool", arguments={}, internal_id="test_id")
 
     # Validate the tool call
     await boundary.validate(call)
@@ -183,7 +183,7 @@ async def test_policy_deny():
     )
 
     boundary = ToolInvocationBoundary(registry, policy)
-    call = ToolCall(name="denied_tool", arguments={})
+    call = ToolCall(name="denied_tool", arguments={}, internal_id="test_id")
 
     with pytest.raises(PolicyDeniedError, match="denied by policy: Forbidden"):
         await boundary.validate(call)
@@ -204,7 +204,7 @@ async def test_policy_require_approval():
     )
 
     boundary = ToolInvocationBoundary(registry, policy)
-    call = ToolCall(name="approval_tool", arguments={})
+    call = ToolCall(name="approval_tool", arguments={}, internal_id="test_id")
 
     validated = await boundary.validate(call)
     assert validated.decision.decision == PolicyDecisionType.REQUIRE_USER_APPROVAL

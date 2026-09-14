@@ -187,7 +187,7 @@ class AgentRuntime(DefaultAgent):
                         else:
                             # Create the bound ApprovalRequest
                             approval_request = ApprovalRequest(
-                                request_id=tool_call.internal_id or f"req_{time.time()}",
+                                request_id=tool_call.internal_id,
                                 tool_name=validated_call.tool.name,
                                 arguments=validated_call.call.arguments,
                                 risk_level=validated_call.decision.risk_level,
@@ -309,9 +309,9 @@ class AgentRuntime(DefaultAgent):
 
             tool_calls.append(ToolCall(
                 name=name,
+                internal_id=uuid.uuid4().hex,
                 arguments=dict(arguments),
                 id=call_id,
-                internal_id=uuid.uuid4().hex,
             ))
 
         return tuple(tool_calls)

@@ -38,7 +38,7 @@ class MockTool(Tool):
 async def test_executor_authorized_allow():
     """Verify that a tool with ALLOW decision executes successfully."""
     tool = MockTool("allow_tool", {"type": "object", "properties": {}})
-    call = ToolCall(name="allow_tool", arguments={"arg1": "val1"})
+    call = ToolCall(name="allow_tool", arguments={"arg1": "val1"}, internal_id="test_id")
     decision = PolicyDecision(
         decision=PolicyDecisionType.ALLOW,
         reason="Allowed",
@@ -84,7 +84,7 @@ async def test_executor_authorized_approved():
 async def test_executor_denies_unapproved():
     """Verify that a tool requiring approval raises ApprovalRequiredError if approved=False."""
     tool = MockTool("approval_tool", {"type": "object", "properties": {}})
-    call = ToolCall(name="approval_tool", arguments={})
+    call = ToolCall(name="approval_tool", arguments={}, internal_id="test_id")
     decision = PolicyDecision(
         decision=PolicyDecisionType.REQUIRE_USER_APPROVAL,
         reason="Approval needed",
@@ -104,7 +104,7 @@ async def test_executor_handles_tool_failure():
     # Override execute to raise an exception
     tool.execute = AsyncMock(side_effect=Exception("Boom!"))
 
-    call = ToolCall(name="fail_tool", arguments={})
+    call = ToolCall(name="fail_tool", arguments={}, internal_id="test_id")
     decision = PolicyDecision(
         decision=PolicyDecisionType.ALLOW,
         reason="Allowed",

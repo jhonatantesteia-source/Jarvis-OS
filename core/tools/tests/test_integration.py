@@ -62,7 +62,7 @@ def setup_system():
 async def test_full_flow_allow(setup_system):
     """Prove the path: ToolCall -> Boundary -> Policy -> Executor -> ToolResult (ALLOW)."""
     boundary, executor = setup_system
-    call = ToolCall(name="low_risk", arguments={})
+    call = ToolCall(name="low_risk", arguments={}, internal_id="test_id")
 
     # 1. Boundary validation
     validated = await boundary.validate(call)
@@ -77,7 +77,7 @@ async def test_full_flow_allow(setup_system):
 async def test_full_flow_deny(setup_system):
     """Prove that a denied tool never reaches the executor."""
     boundary, executor = setup_system
-    call = ToolCall(name="crit_risk", arguments={})
+    call = ToolCall(name="crit_risk", arguments={}, internal_id="test_id")
 
     with pytest.raises(PolicyDeniedError):
         await boundary.validate(call)
