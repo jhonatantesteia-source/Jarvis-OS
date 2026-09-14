@@ -93,15 +93,38 @@ class ToolInvocationBoundary:
         if not schema:
             return
 
-        # 1. Validate top-level schema keywords
+        if not isinstance(schema, dict):
+            raise ToolValidationError(f"Schema for tool {tool.name!r} must be a mapping.")
+
+        # 1. Validate top-level schema structure and keywords
         for key in schema:
             if key not in SUPPORTED_TOP_LEVEL_KEYWORDS:
                 raise ToolValidationError(
                     f"Unsupported schema keyword {key!r} in tool {tool.name!r}. Fail closed."
                 )
 
+        if schema.get("type") != "object":
+            raise ToolValidationError(
+                f"Root schema type for tool {tool.name!r} must be 'object'."
+            )
+
         properties = schema.get("properties", {})
+        if not isinstance(properties, dict):
+            raise ToolValidationError(
+                f"Properties for tool {tool.name!r} must be a mapping."
+            )
+
         required = schema.get("required", [])
+        if not isinstance(required, list) or not all(isinstance(r, str) for r in required):
+            raise ToolValidationError(
+                f"Required field list for tool {tool.name!r} must be a list of strings."
+            )
+
+        for req in required:
+            if req not in properties:
+                raise ToolValidationError(
+                    f"Required argument {req!r} for tool {tool.name!r} is not defined in properties."
+                )
 
         # Map JSON schema types to Python types
         type_map = {
@@ -116,6 +139,10 @@ class ToolInvocationBoundary:
             # 2. Validate property-level schema keywords
             fields = {}
             for name, prop in properties.items():
+                if not isinstance(name, str):
+                    raise ToolValidationError(
+                        f"Property name {name!r} for tool {tool.name!r} must be a string."
+                    )
                 if not isinstance(prop, dict):
                     raise ToolValidationError(
                         f"Property {name!r} for tool {tool.name!r} must be a schema object."

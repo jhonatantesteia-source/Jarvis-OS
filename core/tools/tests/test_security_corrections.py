@@ -372,3 +372,60 @@ async def test_p0_2_supported_primitive_still_works(setup_boundary):
     call = ToolCall(name="test_tool", arguments={"name": "Jarvis", "age": 1, "active": True, "score": 95.5}, internal_id="int1")
     validated = await boundary.validate(call)
     assert validated.tool.name == "test_tool"
+
+@pytest.mark.anyio
+async def test_p0_2_schema_structure_validation(setup_boundary):
+    """Verify that the tool schema structure itself is validated before argument validation."""
+    boundary, registry, _ = setup_boundary
+    
+    # 1. Schema must be a mapping
+    tool_not_dict = MockTool("not_dict", "not-a-dict") # type: ignore
+    registry.register(tool_not_dict)
+    call = ToolCall(name="not_dict", arguments={}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="must be a mapping"):
+        await boundary.validate(call)
+    
+    # 2. Type must be 'object'
+    tool_wrong_type = MockTool("wrong_type", {"type": "array"})
+    registry.register(tool_wrong_type)
+    call = ToolCall(name="wrong_type", arguments={}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="must be 'object'"):
+        await boundary.validate(call)
+        
+    # 3. Properties must be a mapping
+    tool_wrong_props = MockTool("wrong_props", {"type": "object", "properties": []})
+    registry.register(tool_wrong_props)
+    call = ToolCall(name="wrong_props", arguments={}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="must be a mapping"):
+        await boundary.validate(call)
+        
+    # 4. Required must be list of strings
+    tool_wrong_req = MockTool("wrong_req", {"type": "object", "required": "not-a-list"})
+    registry.register(tool_wrong_req)
+    call = ToolCall(name="wrong_req", arguments={}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="must be a list of strings"):
+        await boundary.validate(call)
+        
+    # 5. Required fields must exist in properties
+    tool_missing_prop = MockTool("missing_prop", {
+        "type": "object", 
+        "properties": {"a": {"type": "string"}},
+        "required": ["b"]
+    })
+    registry.register(tool_missing_prop)
+    call = ToolCall(name="missing_prop", arguments={"a": "val"}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="is not defined in properties"):
+        await boundary.validate(call)
+
+    # 6. Property names must be strings
+    # This is hard to trigger with a dict literal, but we can use a custom dict
+    class BadDict(dict):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self[123] = {"type": "string"}
+            
+    tool_bad_prop_name = MockTool("bad_prop_name", {"type": "object", "properties": BadDict()})
+    registry.register(tool_bad_prop_name)
+    call = ToolCall(name="bad_prop_name", arguments={}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="must be a string"):
+        await boundary.validate(call)
