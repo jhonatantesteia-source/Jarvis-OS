@@ -27,3 +27,13 @@ class PolicyDeniedError(ToolError):
 class ApprovalRequiredError(ToolError):
     """Raised when a tool call requires user approval but none was provided.
     """
+
+
+def get_safe_error_message(exc: Exception) -> str:
+    """Returns a sanitized error message for user consumption.
+    """
+    if isinstance(exc, (ToolNotFoundError, ToolValidationError, PolicyDeniedError, ApprovalRequiredError)):
+        return str(exc)
+
+    # For all other exceptions, return a generic message to avoid leaking internals
+    return "An internal error occurred during tool execution."

@@ -33,11 +33,17 @@ class ToolCall:
     tool-calling APIs identify a call); otherwise the runtime assigns a
     deterministic fallback so multiple simultaneous tool calls in the same
     round never fail to correlate correctly.
+
+    ``internal_id`` is a system-generated UUID used for security-sensitive
+    correlation (e.g., approval grants) to ensure the identity is not
+    controllable by the LLM.
     """
 
     name: str
     arguments: Mapping[str, Any] = field(default_factory=dict)
     id: str | None = None
+    internal_id: str | None = None
+
 
 
 @dataclass(frozen=True, slots=True)

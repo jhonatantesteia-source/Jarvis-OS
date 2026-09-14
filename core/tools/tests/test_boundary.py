@@ -91,7 +91,7 @@ async def test_argument_validation_missing_required():
     boundary = ToolInvocationBoundary(registry, policy)
     call = ToolCall(name="test_tool", arguments={}) # missing 'text'
 
-    with pytest.raises(ToolValidationError, match="missing required argument: 'text'"):
+    with pytest.raises(ToolValidationError, match="Field required"):
         await boundary.validate(call)
 
 
@@ -110,7 +110,26 @@ async def test_argument_validation_wrong_type():
     boundary = ToolInvocationBoundary(registry, policy)
     call = ToolCall(name="test_tool", arguments={"count": "not-an-int"})
 
-    with pytest.raises(ToolValidationError, match="must be an integer"):
+    with pytest.raises(ToolValidationError, match="Input should be a valid integer"):
+        await boundary.validate(call)
+
+
+@pytest.mark.anyio
+async def test_argument_validation_unknown_argument():
+    """Verify that unknown arguments are strictly rejected."""
+    registry = ToolRegistry()
+    schema = {
+        "type": "object",
+        "properties": {"query": {"type": "string"}},
+    }
+    tool = MockTool("test_tool", schema)
+    registry.register(tool)
+
+    policy = MagicMock(spec=PolicyEngine)
+    boundary = ToolInvocationBoundary(registry, policy)
+    call = ToolCall(name="test_tool", arguments={"query": "weather", "unexpected": True})
+
+    with pytest.raises(ToolValidationError, match="Extra inputs are not permitted"):
         await boundary.validate(call)
 
 

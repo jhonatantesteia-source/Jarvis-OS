@@ -136,6 +136,16 @@ Key features:
 - Expiration: Time-to-live (TTL) enforced at the final execution gate.
 - Fail-Closed: Any provider failure or denied decision blocks execution.
 
+Security Hardening (Post-Implementation):
+- Strict Argument Validation: Pydantic-based schema enforcement that rejects unknown arguments.
+- Internal Invocation Identity: System-generated UUIDs for security correlation, preventing LLM-controlled IDs.
+- Strict Expiration: Grants are invalid exactly at and after the expiration timestamp.
+- Exception Sanitization: User-facing errors are cleaned to prevent internal information disclosure.
+- Security Audit Events: Structured logging of all authorization decisions and execution outcomes.
+
+Future Security Requirements:
+- Memory authorization hardening: Distinguishing between retrieval (read), store (write), and deletion (mutation) risk levels.
+
 ## Roadmap
 
 Foundation → LLM → Windows Tools → Memory → HITL → Skills → Voice → Agents → Neural HUD → Proactivity → Production Packaging.

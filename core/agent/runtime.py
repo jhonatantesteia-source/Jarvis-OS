@@ -8,6 +8,7 @@ The runtime is responsible for producing an agent response, which may either be
 from __future__ import annotations
 
 import time
+import uuid
 from typing import Any, Mapping, Sequence
 
 from core.agent.errors import AgentError, AgentExecutionError, AgentInputError
@@ -19,8 +20,14 @@ from core.approval.base import ApprovalProvider, ApprovalRequest, ApprovalResult
 from core.tools import ToolRegistry
 from core.tools.base import ToolResult
 from core.tools.boundary import ToolInvocationBoundary
-from core.tools.errors import ToolNotFoundError, PolicyDeniedError, ApprovalRequiredError
+from core.tools.errors import (
+    ToolNotFoundError,
+    PolicyDeniedError,
+    ApprovalRequiredError,
+    get_safe_error_message,
+)
 from core.tools.policy import PolicyDecisionType
+from core.tools.audit import SecurityAuditLogger
 
 
 class InvalidLLMResponseError(AgentError):
@@ -98,6 +105,7 @@ class AgentRuntime(DefaultAgent):
         context: AgentContext | None = None,
         memory_provider: MemoryProvider | None = None,
         approval_provider: ApprovalProvider | None = None,
+        audit_logger: SecurityAuditLogger | None = None,
         *,
         max_tool_rounds: int = MAX_TOOL_ROUNDS,
     ) -> None:
@@ -108,6 +116,7 @@ class AgentRuntime(DefaultAgent):
         self._max_tool_rounds = max_tool_rounds
         self._memory_provider = memory_provider
         self._approval_provider = approval_provider
+        self._audit_logger = audit_logger
 
         if self._memory_provider:
             from core.memory.tools import StoreMemoryTool, RetrieveMemoryTool, ListMemoriesTool, DeleteMemoryTool
@@ -178,13 +187,23 @@ class AgentRuntime(DefaultAgent):
                         else:
                             # Create the bound ApprovalRequest
                             approval_request = ApprovalRequest(
-                                request_id=tool_call.id or f"req_{time.time()}",
+                                request_id=tool_call.internal_id or f"req_{time.time()}",
                                 tool_name=validated_call.tool.name,
                                 arguments=validated_call.call.arguments,
                                 risk_level=validated_call.decision.risk_level,
                                 reason=validated_call.decision.reason,
                                 timestamp=time.time(),
                             )
+
+                            if self._audit_logger:
+                                self._audit_logger.log_event(
+                                    SecurityAuditLogger.APPROVAL_REQUESTED,
+                                    tool_call.internal_id,
+                                    validated_call.tool.name,
+                                    "PENDING",
+                                    validated_call.decision.reason,
+                                    risk_level=validated_call.decision.risk_level,
+                                )
 
                             # Async wait for human decision
                             approval_result = await self._approval_provider.request_approval(approval_request)
@@ -197,9 +216,25 @@ class AgentRuntime(DefaultAgent):
                                         error=f"Approval result identity mismatch: expected {approval_request.request_id}, got {approval_result.request_id}"
                                     )
                                 else:
+                                    if self._audit_logger:
+                                        self._audit_logger.log_event(
+                                            SecurityAuditLogger.APPROVAL_APPROVED,
+                                            tool_call.internal_id,
+                                            validated_call.tool.name,
+                                            "APPROVED",
+                                            "User granted approval",
+                                        )
                                     # Pass the explicit Grant to the executor
                                     result = await self._executor.execute(validated_call, grant=approval_result.grant)
                             else:
+                                if self._audit_logger:
+                                    self._audit_logger.log_event(
+                                        SecurityAuditLogger.APPROVAL_DENIED,
+                                        tool_call.internal_id,
+                                        validated_call.tool.name,
+                                        "DENIED",
+                                        f"User or system denied: {approval_result.state.name}",
+                                    )
                                 result = ToolResult(
                                     success=False,
                                     error=f"Tool execution denied by user or system: {approval_result.state.name}"
@@ -211,7 +246,7 @@ class AgentRuntime(DefaultAgent):
                 except (PolicyDeniedError, ToolNotFoundError) as exc:
                     result = ToolResult(success=False, error=str(exc))
                 except Exception as exc:
-                    result = ToolResult(success=False, error=f"Unexpected tool error: {exc}")
+                    result = ToolResult(success=False, error=get_safe_error_message(exc))
 
                 # Append result to history
                 messages.append({
@@ -272,6 +307,11 @@ class AgentRuntime(DefaultAgent):
                     f"Tool call 'id' must be a non-empty string: {raw_call!r}"
                 )
 
-            tool_calls.append(ToolCall(name=name, arguments=dict(arguments), id=call_id))
+            tool_calls.append(ToolCall(
+                name=name,
+                arguments=dict(arguments),
+                id=call_id,
+                internal_id=uuid.uuid4().hex,
+            ))
 
         return tuple(tool_calls)

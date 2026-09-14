@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Mapping
+from pydantic import create_model, ConfigDict, ValidationError
 
 from core.agent.models import ToolCall
 from core.tools.base import Tool
@@ -75,42 +76,47 @@ class ToolInvocationBoundary:
         )
 
     def _validate_arguments(self, tool: Tool, arguments: Mapping[str, Any]) -> None:
-        """Perform basic validation of arguments against the tool's schema."""
+        """Perform strict validation of arguments against the tool's schema.
+
+        Uses Pydantic to enforce type safety and reject unknown arguments.
+        """
         schema = tool.input_schema
         if not schema:
             return
 
-        # Basic JSON Schema-like validation
         properties = schema.get("properties", {})
         required = schema.get("required", [])
 
-        # Check for missing required arguments
-        for req in required:
-            if req not in arguments:
-                raise ToolValidationError(
-                    f"Tool {tool.name!r} is missing required argument: {req!r}"
-                )
+        # Map JSON schema types to Python types
+        type_map = {
+            "string": str,
+            "integer": int,
+            "boolean": bool,
+            "number": float,
+        }
 
-        # Basic type checking for provided arguments
-        for key, value in arguments.items():
-            if key not in properties:
-                # We'll allow extra arguments for now, but a stricter policy
-                # could reject them.
-                continue
+        try:
+            # Create a dynamic model with 'forbid' extra properties to reject unknown arguments
+            fields = {
+                name: (
+                    type_map.get(prop.get("type", "string"), Any),
+                    ... if name in required else None
+                )
+                for name, prop in properties.items()
+            }
 
-            expected_type = properties[key].get("type")
-            if expected_type == "string" and not isinstance(value, str):
-                raise ToolValidationError(
-                    f"Argument {key!r} for tool {tool.name!r} must be a string, "
-                    f"got {type(value).__name__}"
-                )
-            elif expected_type == "integer" and not isinstance(value, int):
-                raise ToolValidationError(
-                    f"Argument {key!r} for tool {tool.name!r} must be an integer, "
-                    f"got {type(value).__name__}"
-                )
-            elif expected_type == "boolean" and not isinstance(value, bool):
-                raise ToolValidationError(
-                    f"Argument {key!r} for tool {tool.name!r} must be a boolean, "
-                    f"got {type(value).__name__}"
-                )
+            ValidationModel = create_model(
+                f"{tool.name}Model",
+                __config__=ConfigDict(extra="forbid"),
+                **fields
+            )
+
+            ValidationModel(**arguments)
+        except ValidationError as exc:
+            # Extract a concise error message from Pydantic's error list
+            error_detail = exc.errors()[0]
+            loc = ".".join(map(str, error_detail["loc"]))
+            msg = error_detail["msg"]
+            raise ToolValidationError(f"Invalid argument {loc!r} for tool {tool.name!r}: {msg}")
+        except Exception as exc:
+            raise ToolValidationError(f"Argument validation failed for tool {tool.name!r}: {exc}")
