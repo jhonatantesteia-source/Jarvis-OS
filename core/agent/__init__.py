@@ -1,0 +1,37 @@
+"""Agent Runtime abstractions for Jarvis OS.
+
+Wires an ``LLMProvider`` and a ``ToolRegistry`` into a single bounded
+tool-call loop:
+
+    Agent
+        v
+    LLMProvider
+        v
+    ToolRegistry
+        v
+    Tool
+
+No concrete LLM provider, memory backend, or frontend integration lives
+here — see ``core.llm`` and ``core.tools`` for the underlying contracts
+this module builds on.
+"""
+
+from .models import AgentRequest, AgentResponse, ToolCall
+from .runtime import (
+    DefaultAgent,
+    AgentError,
+    AgentRuntime,
+    InvalidLLMResponseError,
+    ToolNotFoundError,
+)
+
+__all__ = [
+    "AgentRequest",
+    "AgentResponse",
+    "ToolCall",
+    "DefaultAgent",
+    "AgentRuntime",
+    "AgentError",
+    "ToolNotFoundError",
+    "InvalidLLMResponseError",
+]

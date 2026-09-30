@@ -19,12 +19,8 @@ function createWindow() {
   win.webContents.on("did-finish-load", () => {
     console.log("[jarvis] página carregada com sucesso");
   });
-  if (isDev) {
-    win.loadURL("http://127.0.0.1:5173");
-    win.webContents.openDevTools({ mode: "detach" });
-  } else {
-    win.loadFile(path.join(__dirname, "../renderer/dist/index.html"));
-  }
+  if (isDev) win.loadURL("http://127.0.0.1:5173");
+  else win.loadFile(path.join(__dirname, "../renderer/dist/index.html"));
 }
 app.whenReady().then(() => { createWindow(); app.on("activate", () => { if (!BrowserWindow.getAllWindows().length) createWindow(); }); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
