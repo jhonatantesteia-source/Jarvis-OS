@@ -429,3 +429,26 @@ async def test_p0_2_schema_structure_validation(setup_boundary):
     call = ToolCall(name="bad_prop_name", arguments={}, internal_id="int1")
     with pytest.raises(ToolValidationError, match="must be a string"):
         await boundary.validate(call)
+
+@pytest.mark.anyio
+async def test_p0_2_empty_schema_fails_closed(setup_boundary):
+    """Verify that an empty schema {} is rejected as it lacks 'type': 'object'."""
+    boundary, registry, _ = setup_boundary
+    tool = MockTool("empty_tool", {})
+    registry.register(tool)
+    
+    call = ToolCall(name="empty_tool", arguments={}, internal_id="int1")
+    with pytest.raises(ToolValidationError, match="Root schema type for tool 'empty_tool' must be 'object'"):
+        await boundary.validate(call)
+
+@pytest.mark.anyio
+async def test_p0_2_none_schema_allowed(setup_boundary):
+    """Verify that schema=None is still explicitly allowed as 'no schema defined'."""
+    boundary, registry, _ = setup_boundary
+    # We must mock the Tool to return None for input_schema
+    tool = MockTool("no_schema_tool", None) # type: ignore
+    registry.register(tool)
+    
+    call = ToolCall(name="no_schema_tool", arguments={"any": "thing"}, internal_id="int1")
+    validated = await boundary.validate(call)
+    assert validated.tool.name == "no_schema_tool"

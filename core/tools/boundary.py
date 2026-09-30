@@ -90,7 +90,7 @@ class ToolInvocationBoundary:
         Unsupported schema keywords result in a fail-closed ToolValidationError.
         """
         schema = tool.input_schema
-        if not schema:
+        if schema is None:
             return
 
         if not isinstance(schema, dict):
